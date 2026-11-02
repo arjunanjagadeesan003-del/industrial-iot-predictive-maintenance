@@ -828,6 +828,11 @@ Any practical industrial deployment must use independently designed safety prote
 - Sensor Interfacing
 - IoT Cloud Integration
 - Python Machine Learning
+
+
+
+
+
 - Web Application Development
 - Industrial Anomaly Detection
 
