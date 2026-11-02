@@ -1,0 +1,478 @@
+
+/* ==========================================
+   INDUSTRIAL IoT DASHBOARD
+   ========================================== */
+
+:root {
+    --background: #f4f7fb;
+    --surface: #ffffff;
+    --primary: #2563eb;
+    --text: #172033;
+    --muted: #748096;
+    --border: #e5eaf2;
+    --green: #16a36a;
+    --red: #dc3545;
+    --orange: #e99a27;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background: var(--background);
+    color: var(--text);
+}
+
+.app-container {
+    display: flex;
+    min-height: 100vh;
+}
+
+/* SIDEBAR */
+
+.sidebar {
+    width: 250px;
+    background: #111c32;
+    color: white;
+    padding: 28px 18px;
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 45px;
+}
+
+.brand-icon {
+    width: 44px;
+    height: 44px;
+    background: #2563eb;
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    font-weight: bold;
+    font-size: 18px;
+}
+
+.brand h2 {
+    font-size: 14px;
+    letter-spacing: 1px;
+}
+
+.brand p {
+    color: #a9b6ca;
+    font-size: 11px;
+    margin-top: 5px;
+}
+
+.sidebar nav {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.sidebar nav a {
+    color: #c1ccdc;
+    text-decoration: none;
+    padding: 14px;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: 0.2s;
+}
+
+.sidebar nav a span {
+    margin-right: 10px;
+}
+
+.sidebar nav a:hover,
+.sidebar nav a.active {
+    background: #263a5d;
+    color: white;
+}
+
+.sidebar-footer {
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #a9b6ca;
+    font-size: 13px;
+}
+
+.online-dot {
+    width: 9px;
+    height: 9px;
+    background: #21c987;
+    border-radius: 50%;
+}
+
+/* MAIN CONTENT */
+
+.main-content {
+    width: calc(100% - 250px);
+    margin-left: 250px;
+    padding: 30px;
+}
+
+.topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 35px;
+}
+
+.topbar h1 {
+    font-size: 25px;
+    margin-bottom: 7px;
+}
+
+.topbar p {
+    color: var(--muted);
+    font-size: 14px;
+}
+
+.topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.status-badge {
+    padding: 8px 13px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+.status-badge.online {
+    background: #d9f7e9;
+    color: #087b4a;
+}
+
+.status-badge.offline {
+    background: #ffe2e4;
+    color: #b42332;
+}
+
+.refresh-button {
+    border: none;
+    background: var(--primary);
+    color: white;
+    padding: 10px 17px;
+    border-radius: 7px;
+    cursor: pointer;
+}
+
+.refresh-button:hover {
+    background: #174db9;
+}
+
+/* SECTION HEADINGS */
+
+section {
+    margin-bottom: 35px;
+}
+
+.section-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.section-heading h2 {
+    font-size: 19px;
+}
+
+.section-heading span {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+/* SENSOR CARDS */
+
+.overview-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 17px;
+}
+
+.metric-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px;
+    box-shadow: 0 3px 12px rgba(20, 40, 80, 0.03);
+}
+
+.metric-title {
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 15px;
+}
+
+.metric-value {
+    font-size: 29px;
+    font-weight: bold;
+}
+
+.metric-value small {
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: normal;
+}
+
+.metric-description {
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 12px;
+}
+
+/* MACHINE HEALTH */
+
+.health-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 25px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+}
+
+.health-label {
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 10px;
+}
+
+.health-card h2 {
+    font-size: 23px;
+    margin-bottom: 10px;
+}
+
+.health-card p:last-child {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.health-indicator {
+    width: 75px;
+    height: 75px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 28px;
+    font-weight: bold;
+    background: #e9eef5;
+    color: #64748b;
+    flex-shrink: 0;
+}
+
+.health-indicator.normal {
+    background: #d9f7e9;
+    color: var(--green);
+}
+
+.health-indicator.anomaly {
+    background: #ffe2e4;
+    color: var(--red);
+}
+
+.ai-details {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.ai-details div {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    padding: 17px;
+}
+
+.ai-details span,
+.stat-card span {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+    margin-bottom: 9px;
+}
+
+.ai-details strong {
+    font-size: 14px;
+}
+
+/* STATISTICS */
+
+.statistics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+}
+
+.stat-card h2 {
+    font-size: 25px;
+}
+
+/* CHARTS */
+
+.charts-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px;
+}
+
+.chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    min-width: 0;
+    height: 300px;
+}
+
+.chart-card h3 {
+    font-size: 14px;
+    margin-bottom: 20px;
+}
+
+.chart-card canvas {
+    max-height: 220px;
+}
+
+/* FAULT TABLE */
+
+.table-container {
+    overflow-x: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 650px;
+}
+
+th,
+td {
+    padding: 15px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+}
+
+th {
+    color: var(--muted);
+    background: #f8fafc;
+}
+
+td {
+    color: #344054;
+}
+
+.anomaly-tag {
+    display: inline-block;
+    padding: 6px 10px;
+    border-radius: 20px;
+    background: #ffe2e4;
+    color: #b42332;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+/* FOOTER */
+
+footer {
+    border-top: 1px solid var(--border);
+    padding: 25px 0;
+    text-align: center;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 2;
+}
+
+/* RESPONSIVE DESIGN */
+
+@media (max-width: 1000px) {
+
+    .overview-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .statistics-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+}
+
+@media (max-width: 700px) {
+
+    .sidebar {
+        position: relative;
+        width: 100%;
+        height: auto;
+    }
+
+    .sidebar nav {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    .sidebar-footer {
+        margin-top: 20px;
+    }
+
+    .app-container {
+        flex-direction: column;
+    }
+
+    .main-content {
+        width: 100%;
+        margin-left: 0;
+        padding: 18px;
+    }
+
+    .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .overview-grid,
+    .statistics-grid,
+    .charts-grid,
+    .ai-details {
+        grid-template-columns: 1fr;
+    }
+
+}

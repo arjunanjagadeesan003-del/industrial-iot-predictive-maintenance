@@ -1,0 +1,453 @@
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>Industrial IoT | Predictive Maintenance</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+</head>
+
+<body>
+
+<div class="app-container">
+
+    <!-- SIDEBAR -->
+
+    <aside class="sidebar">
+
+        <div class="brand">
+
+            <div class="brand-icon">AI</div>
+
+            <div>
+                <h2>INDUSTRIAL IoT</h2>
+                <p>Predictive Maintenance</p>
+            </div>
+
+        </div>
+
+        <nav>
+
+            <a href="#overview" class="active">
+                <span>▦</span> Overview
+            </a>
+
+            <a href="#sensors">
+                <span>◉</span> Sensor Monitoring
+            </a>
+
+            <a href="#analytics">
+                <span>▥</span> AI Analytics
+            </a>
+
+            <a href="#faults">
+                <span>⚠</span> Fault History
+            </a>
+
+        </nav>
+
+        <div class="sidebar-footer">
+
+            <div class="online-dot"></div>
+
+            <span>Monitoring System</span>
+
+        </div>
+
+    </aside>
+
+
+    <!-- MAIN CONTENT -->
+
+    <main class="main-content">
+
+        <!-- HEADER -->
+
+        <header class="topbar">
+
+            <div>
+
+                <h1>Machine Monitoring Dashboard</h1>
+
+                <p>
+                    Industrial IoT Predictive Maintenance
+                </p>
+
+            </div>
+
+            <div class="topbar-right">
+
+                <span id="connectionStatus"
+                      class="status-badge offline">
+                    CONNECTING
+                </span>
+
+                <button id="refreshButton"
+                        class="refresh-button">
+                    Refresh
+                </button>
+
+            </div>
+
+        </header>
+
+
+        <!-- OVERVIEW -->
+
+        <section id="overview">
+
+            <div class="section-heading">
+
+                <h2>System Overview</h2>
+
+                <span id="lastUpdated">
+                    Waiting for data...
+                </span>
+
+            </div>
+
+
+            <div class="overview-grid">
+
+                <div class="metric-card">
+
+                    <div class="metric-title">
+                        Temperature
+                    </div>
+
+                    <div class="metric-value">
+                        <span id="temperature">--</span>
+                        <small>°C</small>
+                    </div>
+
+                    <div class="metric-description">
+                        DHT11 Sensor
+                    </div>
+
+                </div>
+
+
+                <div class="metric-card">
+
+                    <div class="metric-title">
+                        Humidity
+                    </div>
+
+                    <div class="metric-value">
+                        <span id="humidity">--</span>
+                        <small>%</small>
+                    </div>
+
+                    <div class="metric-description">
+                        DHT11 Sensor
+                    </div>
+
+                </div>
+
+
+                <div class="metric-card">
+
+                    <div class="metric-title">
+                        Current
+                    </div>
+
+                    <div class="metric-value">
+                        <span id="current">--</span>
+                        <small>mA</small>
+                    </div>
+
+                    <div class="metric-description">
+                        INA219 Sensor
+                    </div>
+
+                </div>
+
+
+                <div class="metric-card">
+
+                    <div class="metric-title">
+                        Voltage
+                    </div>
+
+                    <div class="metric-value">
+                        <span id="voltage">--</span>
+                        <small>V</small>
+                    </div>
+
+                    <div class="metric-description">
+                        INA219 Sensor
+                    </div>
+
+                </div>
+
+
+                <div class="metric-card">
+
+                    <div class="metric-title">
+                        Power
+                    </div>
+
+                    <div class="metric-value">
+                        <span id="power">--</span>
+                        <small>mW</small>
+                    </div>
+
+                    <div class="metric-description">
+                        Calculated by INA219
+                    </div>
+
+                </div>
+
+
+                <div class="metric-card">
+
+                    <div class="metric-title">
+                        Vibration
+                    </div>
+
+                    <div class="metric-value">
+                        <span id="vibration">--</span>
+                    </div>
+
+                    <div class="metric-description">
+                        MPU6050 Sensor
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- MACHINE HEALTH -->
+
+        <section class="health-section">
+
+            <div class="section-heading">
+
+                <h2>AI Machine Health Analysis</h2>
+
+            </div>
+
+            <div class="health-card">
+
+                <div>
+
+                    <p class="health-label">
+                        Current Machine Condition
+                    </p>
+
+                    <h2 id="machineHealth">
+                        WAITING FOR AI DATA
+                    </h2>
+
+                    <p id="aiMessage">
+                        AI analysis will appear here.
+                    </p>
+
+                </div>
+
+                <div class="health-indicator"
+                     id="healthIndicator">
+                    ?
+                </div>
+
+            </div>
+
+            <div class="ai-details">
+
+                <div>
+                    <span>AI Algorithm</span>
+                    <strong id="aiModel">
+                        Isolation Forest
+                    </strong>
+                </div>
+
+                <div>
+                    <span>AI Result</span>
+                    <strong id="aiStatus">--</strong>
+                </div>
+
+                <div>
+                    <span>Anomaly Score</span>
+                    <strong id="anomalyScore">--</strong>
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- STATISTICS -->
+
+        <section id="analytics">
+
+            <div class="section-heading">
+
+                <h2>Monitoring Statistics</h2>
+
+            </div>
+
+            <div class="statistics-grid">
+
+                <div class="stat-card">
+                    <span>Total Readings</span>
+                    <h2 id="totalReadings">0</h2>
+                </div>
+
+                <div class="stat-card">
+                    <span>Normal Readings</span>
+                    <h2 id="normalReadings">0</h2>
+                </div>
+
+                <div class="stat-card">
+                    <span>Detected Anomalies</span>
+                    <h2 id="totalAnomalies">0</h2>
+                </div>
+
+                <div class="stat-card">
+                    <span>Anomaly Percentage</span>
+                    <h2 id="anomalyPercentage">0%</h2>
+                </div>
+
+            </div>
+
+
+            <!-- GRAPHS -->
+
+            <div class="charts-grid">
+
+                <div class="chart-card">
+
+                    <h3>Temperature Monitoring</h3>
+
+                    <canvas id="temperatureChart"></canvas>
+
+                </div>
+
+
+                <div class="chart-card">
+
+                    <h3>Current Monitoring</h3>
+
+                    <canvas id="currentChart"></canvas>
+
+                </div>
+
+
+                <div class="chart-card">
+
+                    <h3>Vibration Monitoring</h3>
+
+                    <canvas id="vibrationChart"></canvas>
+
+                </div>
+
+
+                <div class="chart-card">
+
+                    <h3>Humidity Monitoring</h3>
+
+                    <canvas id="humidityChart"></canvas>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- FAULT HISTORY -->
+
+        <section id="faults">
+
+            <div class="section-heading">
+
+                <h2>AI Anomaly History</h2>
+
+                <span>Latest detected anomalies</span>
+
+            </div>
+
+            <div class="table-container">
+
+                <table>
+
+                    <thead>
+
+                        <tr>
+
+                            <th>Time</th>
+
+                            <th>Temperature</th>
+
+                            <th>Current</th>
+
+                            <th>Vibration</th>
+
+                            <th>AI Score</th>
+
+                            <th>Status</th>
+
+                        </tr>
+
+                    </thead>
+
+                    <tbody id="faultTable">
+
+                        <tr>
+                            <td colspan="6">
+                                No anomaly records available.
+                            </td>
+                        </tr>
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </section>
+
+
+        <!-- FOOTER -->
+
+        <footer>
+
+            <p>
+                Industrial IoT Predictive Maintenance System
+            </p>
+
+            <p>
+                ESP32 | ThingSpeak | Python | Isolation Forest
+            </p>
+
+            <p>
+                Monitoring and fault detection only.
+                No automatic repair or recovery.
+            </p>
+
+        </footer>
+
+    </main>
+
+</div>
+
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+
+</body>
+
+</html>

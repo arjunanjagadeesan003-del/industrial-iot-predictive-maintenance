@@ -1,0 +1,23 @@
+industrial-iot-predictive-maintenance/
+│
+├── arduino/
+│   └── industrial_iot_monitor.ino
+│
+├── python_ai/
+│   ├── ai_model.py
+│   ├── requirements.txt
+│   ├── .env.example
+│   │
+│   ├── models/
+│   │   └── .gitkeep
+│   │
+│   ├── data/
+│   │   └── .gitkeep
+│   │
+│   └── logs/
+│       └── .gitkeep
+│
+├── dashboard/
+│
+├── README.md
+└── .gitignore

@@ -1,0 +1,27 @@
+ESP32
+  |
+  v
+ThingSpeak Cloud
+  |
+  v
+python_ai/ai_model.py
+  |
+  |---- isolation_forest_model.pkl
+  |
+  |---- sensor_history.csv
+  |
+  |---- anomaly_history.csv
+  |
+  |---- latest_ai_report.json
+  |
+  v
+dashboard/app.py
+  |
+  v
+Dashboard API
+  |
+  v
+HTML + CSS + JavaScript
+  |
+  v
+Industrial IoT Web Dashboard

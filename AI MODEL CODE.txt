@@ -1,0 +1,976 @@
+
+"""
+=============================================================
+INDUSTRIAL IoT PREDICTIVE MAINTENANCE SYSTEM
+AI-BASED ANOMALY DETECTION USING ISOLATION FOREST
+=============================================================
+
+Project:
+AI-Driven Predictive Maintenance System for Industrial IoT
+
+Hardware:
+- ESP32
+- DHT11 Temperature and Humidity Sensor
+- INA219 Voltage and Current Sensor
+- MPU6050 Vibration Sensor
+
+Cloud:
+- ThingSpeak IoT Platform
+
+Machine Learning:
+- Isolation Forest
+- StandardScaler
+- Feature Engineering
+- Unsupervised Anomaly Detection
+
+Purpose:
+Analyse industrial machine sensor data and identify
+abnormal operating conditions.
+
+NOTE:
+This software detects anomalies and generates alerts.
+It does not perform automatic repair or recovery.
+=============================================================
+"""
+
+import os
+import sys
+import json
+import time
+import logging
+import argparse
+
+from datetime import datetime, timezone
+from pathlib import Path
+
+import requests
+import numpy as np
+import pandas as pd
+import joblib
+
+from dotenv import load_dotenv
+
+from sklearn.ensemble import IsolationForest
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import classification_report
+
+
+# ============================================================
+# 1. PROJECT CONFIGURATION
+# ============================================================
+
+BASE_DIR = Path(__file__).resolve().parent
+
+MODEL_DIR = BASE_DIR / "models"
+DATA_DIR = BASE_DIR / "data"
+LOG_DIR = BASE_DIR / "logs"
+
+MODEL_PATH = MODEL_DIR / "isolation_forest_model.pkl"
+SCALER_MODEL_PATH = MODEL_PATH
+
+HISTORY_FILE = DATA_DIR / "sensor_history.csv"
+ANOMALY_FILE = DATA_DIR / "anomaly_history.csv"
+
+LOG_FILE = LOG_DIR / "ai_system.log"
+
+MODEL_VERSION = "1.0.0"
+
+# Create project folders when the program runs.
+for folder in [MODEL_DIR, DATA_DIR, LOG_DIR]:
+    folder.mkdir(parents=True, exist_ok=True)
+
+
+# ============================================================
+# 2. LOAD ENVIRONMENT VARIABLES
+# ============================================================
+
+load_dotenv(BASE_DIR / ".env")
+
+CHANNEL_ID = os.getenv("THINGSPEAK_CHANNEL_ID", "").strip()
+
+READ_API_KEY = os.getenv(
+    "THINGSPEAK_READ_API_KEY", ""
+).strip()
+
+THINGSPEAK_URL = (
+    f"https://api.thingspeak.com/channels/"
+    f"{CHANNEL_ID}/feeds.json"
+    if CHANNEL_ID else ""
+)
+
+# ThingSpeak historical records.
+FETCH_LIMIT = int(os.getenv("FETCH_LIMIT", "8000"))
+
+# Minimum number of normal readings for training.
+MIN_TRAINING_SAMPLES = int(
+    os.getenv("MIN_TRAINING_SAMPLES", "50")
+)
+
+# Expected percentage of anomalies in training data.
+CONTAMINATION = float(
+    os.getenv("CONTAMINATION", "0.03")
+)
+
+# Number of trees in Isolation Forest.
+N_ESTIMATORS = int(
+    os.getenv("N_ESTIMATORS", "300")
+)
+
+# Random state for reproducible model training.
+RANDOM_STATE = 42
+
+# Maximum allowed time for HTTP requests.
+REQUEST_TIMEOUT = 20
+
+
+# ============================================================
+# 3. SENSOR DATA CONFIGURATION
+# ============================================================
+
+SENSOR_FIELDS = {
+    "field1": "temperature",
+    "field2": "humidity",
+    "field3": "voltage",
+    "field4": "current",
+    "field5": "power",
+    "field6": "vibration",
+    "field7": "fault_code",
+    "field8": "alert_level"
+}
+
+SENSOR_FEATURES = [
+    "temperature",
+    "humidity",
+    "voltage",
+    "current",
+    "power",
+    "vibration"
+]
+
+# AI input features.
+AI_FEATURES = [
+    "temperature",
+    "humidity",
+    "voltage",
+    "current",
+    "power",
+    "vibration",
+    "temperature_current_ratio",
+    "power_current_ratio",
+    "voltage_deviation"
+]
+
+
+# ============================================================
+# 4. LOGGING CONFIGURATION
+# ============================================================
+
+logging.basicConfig(
+    level=logging.INFO,
+    format=(
+        "%(asctime)s | %(levelname)s | %(message)s"
+    ),
+    handlers=[
+        logging.FileHandler(
+            LOG_FILE,
+            encoding="utf-8"
+        ),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+
+logger = logging.getLogger("IndustrialAI")
+
+
+# ============================================================
+# 5. THINGSPEAK DATA FETCHING
+# ============================================================
+
+class ThingSpeakClient:
+    """
+    Retrieves industrial sensor data from ThingSpeak.
+    """
+
+    def __init__(self):
+
+        if not CHANNEL_ID:
+            raise ValueError(
+                "ThingSpeak Channel ID is missing."
+            )
+
+        self.session = requests.Session()
+
+    def fetch_sensor_data(self):
+
+        logger.info(
+            "Connecting to ThingSpeak cloud..."
+        )
+
+        params = {
+            "results": FETCH_LIMIT
+        }
+
+        if READ_API_KEY:
+            params["api_key"] = READ_API_KEY
+
+        last_error = None
+
+        for attempt in range(1, 4):
+
+            try:
+
+                response = self.session.get(
+                    THINGSPEAK_URL,
+                    params=params,
+                    timeout=REQUEST_TIMEOUT
+                )
+
+                response.raise_for_status()
+
+                payload = response.json()
+
+                feeds = payload.get("feeds", [])
+
+                if not feeds:
+                    raise ValueError(
+                        "No sensor records available."
+                    )
+
+                logger.info(
+                    "Retrieved %d ThingSpeak records.",
+                    len(feeds)
+                )
+
+                return pd.DataFrame(feeds)
+
+            except (
+                requests.RequestException,
+                ValueError
+            ) as error:
+
+                last_error = error
+
+                logger.warning(
+                    "Fetch attempt %d failed: %s",
+                    attempt,
+                    error
+                )
+
+                if attempt < 3:
+                    time.sleep(3)
+
+        raise ConnectionError(
+            f"ThingSpeak data retrieval failed: {last_error}"
+        )
+
+
+# ============================================================
+# 6. DATA PREPROCESSING
+# ============================================================
+
+class SensorDataProcessor:
+    """
+    Cleans and prepares sensor data for machine learning.
+    """
+
+    @staticmethod
+    def clean_data(raw_data):
+
+        df = raw_data.copy()
+
+        # Rename ThingSpeak fields.
+        df = df.rename(
+            columns=SENSOR_FIELDS
+        )
+
+        # Convert sensor values into numeric format.
+        for column in SENSOR_FEATURES:
+
+            if column not in df.columns:
+                df[column] = np.nan
+
+            df[column] = pd.to_numeric(
+                df[column],
+                errors="coerce"
+            )
+
+        # Convert ESP32 fault information.
+        for column in ["fault_code", "alert_level"]:
+
+            if column in df.columns:
+
+                df[column] = pd.to_numeric(
+                    df[column],
+                    errors="coerce"
+                )
+
+        # Remove incomplete sensor records.
+        df = df.dropna(
+            subset=SENSOR_FEATURES
+        )
+
+        # Remove infinite values.
+        df = df.replace(
+            [np.inf, -np.inf],
+            np.nan
+        )
+
+        df = df.dropna(
+            subset=SENSOR_FEATURES
+        )
+
+        # Sort records according to timestamp.
+        if "created_at" in df.columns:
+
+            df["created_at"] = pd.to_datetime(
+                df["created_at"],
+                errors="coerce",
+                utc=True
+            )
+
+            df = df.dropna(
+                subset=["created_at"]
+            )
+
+            df = df.sort_values(
+                "created_at"
+            )
+
+        # Remove duplicate timestamps.
+        if "created_at" in df.columns:
+
+            df = df.drop_duplicates(
+                subset=["created_at"],
+                keep="last"
+            )
+
+        df = df.reset_index(drop=True)
+
+        # Physical plausibility checks.
+        df = df[
+            (df["temperature"] >= -40) &
+            (df["temperature"] <= 125) &
+            (df["humidity"] >= 0) &
+            (df["humidity"] <= 100) &
+            (df["voltage"] >= 0) &
+            (df["current"] >= 0) &
+            (df["power"] >= 0) &
+            (df["vibration"] >= 0)
+        ]
+
+        df = df.reset_index(drop=True)
+
+        logger.info(
+            "Valid sensor records after cleaning: %d",
+            len(df)
+        )
+
+        return df
+
+    @staticmethod
+    def identify_normal_data(df):
+        """
+        Uses ESP32 fault flags only to exclude known
+        faulty records from the normal training baseline.
+
+        Fault labels are not supplied as AI features.
+        """
+
+        normal_df = df.copy()
+
+        if "fault_code" in normal_df.columns:
+
+            if normal_df["fault_code"].notna().any():
+
+                normal_df = normal_df[
+                    normal_df["fault_code"] == 0
+                ]
+
+        if "alert_level" in normal_df.columns:
+
+            if normal_df["alert_level"].notna().any():
+
+                normal_df = normal_df[
+                    normal_df["alert_level"] == 0
+                ]
+
+        return normal_df.reset_index(drop=True)
+
+
+# ============================================================
+# 7. FEATURE ENGINEERING
+# ============================================================
+
+class FeatureEngineer:
+    """
+    Creates additional features from sensor readings.
+    """
+
+    @staticmethod
+    def transform(df):
+
+        data = df.copy()
+
+        # Temperature and current relationship.
+        data["temperature_current_ratio"] = (
+            data["temperature"] /
+            (data["current"].abs() + 1.0)
+        )
+
+        # Power and current relationship.
+        data["power_current_ratio"] = (
+            data["power"] /
+            (data["current"].abs() + 1.0)
+        )
+
+        # Voltage deviation from the observed median.
+        voltage_reference = data["voltage"].median()
+
+        data["voltage_deviation"] = (
+            data["voltage"] - voltage_reference
+        ).abs()
+
+        # Replace invalid calculated values.
+        data = data.replace(
+            [np.inf, -np.inf],
+            np.nan
+        )
+
+        data = data.dropna(
+            subset=AI_FEATURES
+        )
+
+        return data
+
+
+# ============================================================
+# 8. ISOLATION FOREST MODEL
+# ============================================================
+
+class IndustrialAnomalyDetector:
+    """
+    Isolation Forest based industrial anomaly detector.
+    """
+
+    def __init__(self):
+
+        self.model = Pipeline(
+            steps=[
+                (
+                    "scaler",
+                    StandardScaler()
+                ),
+
+                (
+                    "isolation_forest",
+                    IsolationForest(
+                        n_estimators=N_ESTIMATORS,
+                        contamination=CONTAMINATION,
+                        max_samples="auto",
+                        max_features=1.0,
+                        bootstrap=False,
+                        random_state=RANDOM_STATE,
+                        n_jobs=-1
+                    )
+                )
+            ]
+        )
+
+        self.is_trained = False
+
+    def train(self, training_data):
+
+        if len(training_data) < MIN_TRAINING_SAMPLES:
+
+            raise ValueError(
+                "Not enough normal sensor readings. "
+                f"Required: {MIN_TRAINING_SAMPLES}, "
+                f"Available: {len(training_data)}"
+            )
+
+        logger.info(
+            "Starting Isolation Forest training..."
+        )
+
+        self.model.fit(
+            training_data[AI_FEATURES]
+        )
+
+        self.is_trained = True
+
+        logger.info(
+            "Isolation Forest training completed."
+        )
+
+    def predict(self, input_data):
+
+        if not self.is_trained:
+
+            raise RuntimeError(
+                "AI model has not been trained."
+            )
+
+        features = input_data[AI_FEATURES]
+
+        prediction = self.model.predict(
+            features
+        )
+
+        scores = self.model.decision_function(
+            features
+        )
+
+        results = input_data.copy()
+
+        results["ai_prediction"] = prediction
+
+        results["anomaly_score"] = scores
+
+        results["ai_status"] = np.where(
+            prediction == -1,
+            "ANOMALY",
+            "NORMAL"
+        )
+
+        return results
+
+    def save_model(self):
+
+        if not self.is_trained:
+            raise RuntimeError(
+                "Cannot save an untrained model."
+            )
+
+        artifact = {
+            "model": self.model,
+            "features": AI_FEATURES,
+            "model_version": MODEL_VERSION,
+            "trained_at": datetime.now(
+                timezone.utc
+            ).isoformat(),
+            "contamination": CONTAMINATION
+        }
+
+        joblib.dump(
+            artifact,
+            MODEL_PATH
+        )
+
+        logger.info(
+            "AI model saved: %s",
+            MODEL_PATH
+        )
+
+    def load_model(self):
+
+        if not MODEL_PATH.exists():
+
+            raise FileNotFoundError(
+                "Trained AI model not found."
+            )
+
+        artifact = joblib.load(
+            MODEL_PATH
+        )
+
+        if artifact.get("features") != AI_FEATURES:
+
+            raise ValueError(
+                "Saved model feature configuration "
+                "does not match current configuration."
+            )
+
+        self.model = artifact["model"]
+
+        self.is_trained = True
+
+        logger.info(
+            "Saved AI model loaded successfully."
+        )
+
+
+# ============================================================
+# 9. MACHINE HEALTH ASSESSMENT
+# ============================================================
+
+class MachineHealthMonitor:
+    """
+    Converts anomaly detection results into
+    machine-health status messages.
+
+    Status is an advisory assessment, not a
+    safety certification or diagnosis.
+    """
+
+    @staticmethod
+    def assess(ai_results):
+
+        results = ai_results.copy()
+
+        results["machine_health"] = np.where(
+            results["ai_prediction"] == -1,
+            "CHECK REQUIRED",
+            "NORMAL"
+        )
+
+        results["recommended_action"] = np.where(
+            results["ai_prediction"] == -1,
+            "Inspect machine and verify sensor readings",
+            "Continue monitoring"
+        )
+
+        return results
+
+
+# ============================================================
+# 10. SAVE SENSOR AND ANOMALY HISTORY
+# ============================================================
+
+class HistoryManager:
+    """
+    Maintains sensor history and anomaly detection history.
+    """
+
+    @staticmethod
+    def save_sensor_history(df):
+
+        if HISTORY_FILE.exists():
+
+            old_data = pd.read_csv(
+                HISTORY_FILE
+            )
+
+            combined = pd.concat(
+                [old_data, df],
+                ignore_index=True
+            )
+
+        else:
+
+            combined = df.copy()
+
+        if "created_at" in combined.columns:
+
+            combined = combined.drop_duplicates(
+                subset=["created_at"],
+                keep="last"
+            )
+
+        combined.to_csv(
+            HISTORY_FILE,
+            index=False
+        )
+
+        logger.info(
+            "Sensor history saved."
+        )
+
+    @staticmethod
+    def save_anomaly_history(results):
+
+        anomalies = results[
+            results["ai_prediction"] == -1
+        ].copy()
+
+        if anomalies.empty:
+
+            logger.info(
+                "No AI anomalies detected in current records."
+            )
+
+            return
+
+        anomalies["detected_at"] = (
+            datetime.now(timezone.utc).isoformat()
+        )
+
+        if ANOMALY_FILE.exists():
+
+            old_anomalies = pd.read_csv(
+                ANOMALY_FILE
+            )
+
+            anomalies = pd.concat(
+                [old_anomalies, anomalies],
+                ignore_index=True
+            )
+
+        anomalies.to_csv(
+            ANOMALY_FILE,
+            index=False
+        )
+
+        logger.warning(
+            "%d anomalous records saved.",
+            len(anomalies)
+        )
+
+
+# ============================================================
+# 11. GENERATE MACHINE STATUS REPORT
+# ============================================================
+
+def generate_report(results):
+
+    latest = results.iloc[-1]
+
+    report = {
+
+        "project": (
+            "Industrial IoT Predictive Maintenance"
+        ),
+
+        "model": "Isolation Forest",
+
+        "model_version": MODEL_VERSION,
+
+        "analysis_time": datetime.now(
+            timezone.utc
+        ).isoformat(),
+
+        "sensor_readings": {
+
+            "temperature_c": float(
+                latest["temperature"]
+            ),
+
+            "humidity_percent": float(
+                latest["humidity"]
+            ),
+
+            "voltage_v": float(
+                latest["voltage"]
+            ),
+
+            "current_ma": float(
+                latest["current"]
+            ),
+
+            "power_mw": float(
+                latest["power"]
+            ),
+
+            "vibration_index": float(
+                latest["vibration"]
+            )
+        },
+
+        "ai_result": {
+
+            "prediction": int(
+                latest["ai_prediction"]
+            ),
+
+            "status": str(
+                latest["ai_status"]
+            ),
+
+            "anomaly_score": float(
+                latest["anomaly_score"]
+            ),
+
+            "machine_health": str(
+                latest["machine_health"]
+            ),
+
+            "recommended_action": str(
+                latest["recommended_action"]
+            )
+        },
+
+        "automatic_recovery": False
+    }
+
+    report_path = DATA_DIR / "latest_ai_report.json"
+
+    with open(
+        report_path,
+        "w",
+        encoding="utf-8"
+    ) as file:
+
+        json.dump(
+            report,
+            file,
+            indent=4
+        )
+
+    logger.info(
+        "Machine health report generated."
+    )
+
+    return report
+
+
+# ============================================================
+# 12. MAIN AI EXECUTION
+# ============================================================
+
+def run_ai_pipeline():
+
+    logger.info(
+        "========================================"
+    )
+
+    logger.info(
+        "INDUSTRIAL IoT AI MONITORING STARTED"
+    )
+
+    logger.info(
+        "========================================"
+    )
+
+    # Step 1: Fetch cloud data.
+    cloud = ThingSpeakClient()
+
+    raw_data = cloud.fetch_sensor_data()
+
+    # Step 2: Clean sensor data.
+    processor = SensorDataProcessor()
+
+    sensor_data = processor.clean_data(
+        raw_data
+    )
+
+    if len(sensor_data) < MIN_TRAINING_SAMPLES + 1:
+
+        raise ValueError(
+            "Insufficient valid historical data."
+        )
+
+    # Step 3: Select normal baseline data.
+    normal_data = processor.identify_normal_data(
+        sensor_data
+    )
+
+    # Step 4: Feature engineering.
+    engineered_normal = FeatureEngineer.transform(
+        normal_data
+    )
+
+    engineered_all = FeatureEngineer.transform(
+        sensor_data
+    )
+
+    if len(engineered_normal) < MIN_TRAINING_SAMPLES:
+
+        raise ValueError(
+            "Not enough known-normal records for training."
+        )
+
+    # Step 5: Train the model.
+    detector = IndustrialAnomalyDetector()
+
+    detector.train(
+        engineered_normal
+    )
+
+    # Step 6: Save the model.
+    detector.save_model()
+
+    # Step 7: Predict all valid readings.
+    predictions = detector.predict(
+        engineered_all
+    )
+
+    # Step 8: Assess machine health.
+    health_monitor = MachineHealthMonitor()
+
+    final_results = health_monitor.assess(
+        predictions
+    )
+
+    # Step 9: Save historical data.
+    HistoryManager.save_sensor_history(
+        sensor_data
+    )
+
+    # Step 10: Save anomaly records.
+    HistoryManager.save_anomaly_history(
+        final_results
+    )
+
+    # Step 11: Generate latest report.
+    report = generate_report(
+        final_results
+    )
+
+    # Step 12: Display final result.
+    latest = final_results.iloc[-1]
+
+    logger.info(
+        "LATEST MACHINE STATUS: %s",
+        latest["machine_health"]
+    )
+
+    logger.info(
+        "AI ANOMALY SCORE: %.5f",
+        latest["anomaly_score"]
+    )
+
+    logger.info(
+        "AI PREDICTION: %s",
+        latest["ai_status"]
+    )
+
+    logger.info(
+        "AI monitoring completed successfully."
+    )
+
+    return report
+
+
+# ============================================================
+# 13. COMMAND-LINE INTERFACE
+# ============================================================
+
+def main():
+
+    parser = argparse.ArgumentParser(
+        description=(
+            "Industrial IoT Isolation Forest "
+            "Predictive Maintenance AI"
+        )
+    )
+
+    parser.add_argument(
+        "--train",
+        action="store_true",
+        help="Train the model and analyse sensor data"
+    )
+
+    args = parser.parse_args()
+
+    # Default operation is training and analysis.
+    # --train is also accepted explicitly.
+    try:
+
+        run_ai_pipeline()
+
+    except KeyboardInterrupt:
+
+        logger.warning(
+            "AI monitoring interrupted by user."
+        )
+
+        sys.exit(0)
+
+    except Exception as error:
+
+        logger.exception(
+            "AI monitoring failed: %s",
+            error
+        )
+
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+
+    main()
+
+
+# ============================================================
+# END OF INDUSTRIAL IoT AI MODEL
+# ============================================================
